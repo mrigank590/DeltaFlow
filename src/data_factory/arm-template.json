@@ -1,0 +1,1571 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "mn-adf-eus"
+        },
+        "mn_ls_kv_properties_typeProperties_baseUrl": {
+            "type": "string",
+            "defaultValue": "https://mn-kv-eus.vault.azure.net/"
+        },
+        "mn_ls_adb_properties_typeProperties_existingClusterId": {
+            "type": "string",
+            "defaultValue": "0922-094142-jgjvyc74"
+        },
+        "mn_ls_sqldb_properties_typeProperties_server": {
+            "type": "string",
+            "defaultValue": "mn-sqlserver-eus.database.windows.net"
+        },
+        "mn_ls_sqldb_properties_typeProperties_database": {
+            "type": "string",
+            "defaultValue": "mn-sql-db-eus-001"
+        },
+        "mn_ls_sqldb_properties_typeProperties_userName": {
+            "type": "string",
+            "defaultValue": "mrigank"
+        },
+        "mn_ls_adls_properties_typeProperties_url": {
+            "type": "string",
+            "defaultValue": "https://mnsteus.dfs.core.windows.net/"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/mn_ls_kv')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureKeyVault",
+                "typeProperties": {
+                    "baseUrl": "[parameters('mn_ls_kv_properties_typeProperties_baseUrl')]"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/mn_ls_adb')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureDatabricks",
+                "typeProperties": {
+                    "domain": "https://adb-1702205720839419.19.azuredatabricks.net/",
+                    "accessToken": {
+                        "type": "AzureKeyVaultSecret",
+                        "store": {
+                            "referenceName": "mn_ls_kv",
+                            "type": "LinkedServiceReference"
+                        },
+                        "secretName": "ADB-access"
+                    },
+                    "existingClusterId": "[parameters('mn_ls_adb_properties_typeProperties_existingClusterId')]"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_kv')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/mn_ls_sqldb')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureSqlDatabase",
+                "typeProperties": {
+                    "server": "[parameters('mn_ls_sqldb_properties_typeProperties_server')]",
+                    "database": "[parameters('mn_ls_sqldb_properties_typeProperties_database')]",
+                    "encrypt": "mandatory",
+                    "trustServerCertificate": false,
+                    "authenticationType": "SQL",
+                    "userName": "[parameters('mn_ls_sqldb_properties_typeProperties_userName')]",
+                    "password": {
+                        "type": "AzureKeyVaultSecret",
+                        "store": {
+                            "referenceName": "mn_ls_kv",
+                            "type": "LinkedServiceReference"
+                        },
+                        "secretName": "SQL-password"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_kv')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/mn_ls_adls')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobFS",
+                "typeProperties": {
+                    "url": "[parameters('mn_ls_adls_properties_typeProperties_url')]",
+                    "accountKey": {
+                        "type": "AzureKeyVaultSecret",
+                        "store": {
+                            "referenceName": "mn_ls_kv",
+                            "type": "LinkedServiceReference"
+                        },
+                        "secretName": "ADLS-connection"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_kv')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_ADLS_file')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "mn_ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "FileName": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": {
+                            "value": "@dataset().FileName",
+                            "type": "Expression"
+                        },
+                        "fileSystem": "filesystem"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_ADLS_zone')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "mn_ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "Container": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "Parquet",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileSystem": {
+                            "value": "@dataset().Container",
+                            "type": "Expression"
+                        }
+                    },
+                    "compressionCodec": "snappy"
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_ADLS_landing')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "mn_ls_adls",
+                    "type": "LinkedServiceReference"
+                },
+                "parameters": {
+                    "Container": {
+                        "type": "string"
+                    },
+                    "SchemaName": {
+                        "type": "string"
+                    },
+                    "TableName": {
+                        "type": "string"
+                    },
+                    "Year": {
+                        "type": "string"
+                    },
+                    "Month": {
+                        "type": "string"
+                    },
+                    "Day": {
+                        "type": "string"
+                    },
+                    "FileName": {
+                        "type": "string"
+                    }
+                },
+                "annotations": [],
+                "type": "Parquet",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobFSLocation",
+                        "fileName": {
+                            "value": "@{dataset().FileName}",
+                            "type": "Expression"
+                        },
+                        "folderPath": {
+                            "value": "@{dataset().SchemaName}/@{dataset().TableName}/@{dataset().Year}/@{dataset().Month}/@{dataset().Day}",
+                            "type": "Expression"
+                        },
+                        "fileSystem": {
+                            "value": "@dataset().Container",
+                            "type": "Expression"
+                        }
+                    },
+                    "compressionCodec": "snappy"
+                },
+                "schema": []
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_adls')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_SQL_sales')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "mn_ls_sqldb",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [],
+                "typeProperties": {}
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_sqldb')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Base_Pipeline')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "Table_And_File_List",
+                        "description": "This Lookup is used to get the list of tables and files from metastore",
+                        "type": "Lookup",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "AzureSqlSource",
+                                "sqlReaderQuery": {
+                                    "value": "SELECT  \n    td.DBName,  \n    td.TableName,  \n    td.SchemaName,  \n    td.FileName,  \n    td.SourceType,  \n    td.WatermarkColumn,  \n    td.WatermarkValue \nFROM Metastore.Table_Details td  \nLEFT JOIN (  \n    SELECT  \n        table_name,  \n        file_name,  \n        MAX(job_end_date) AS max_job_end_date  \n    FROM Metastore.Pipeline_Details  \n    WHERE table_load_status = 'Succeeded'\n    GROUP BY table_name, file_name  \n) pd  \nON ISNULL(td.TableName, '') = ISNULL(pd.Table_name, '') \nAND ISNULL(td.FileName, '') = ISNULL(pd.file_name, '')  -- Handling NULL file names  \nWHERE  \n    (\n        pd.max_job_end_date IS NULL  -- Table was never loaded  \n        OR  \n        pd.max_job_end_date < DATEADD(HOUR, -24, GETDATE())  -- Last load was over 24 hours ago  \n    )\n    AND td.SourceType = '@{pipeline().parameters.source_name}';\n",
+                                    "type": "Expression"
+                                },
+                                "queryTimeout": "02:00:00",
+                                "partitionOption": "None"
+                            },
+                            "dataset": {
+                                "referenceName": "ds_SQL_sales",
+                                "type": "DatasetReference",
+                                "parameters": {}
+                            },
+                            "firstRowOnly": false
+                        }
+                    },
+                    {
+                        "name": "Each_Table_Or_File",
+                        "description": "This ForEach is used to iterate through each table or file one at a time parallelly ",
+                        "type": "ForEach",
+                        "dependsOn": [
+                            {
+                                "activity": "Table_And_File_List",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "items": {
+                                "value": "@activity('Table_And_File_List').output.value",
+                                "type": "Expression"
+                            },
+                            "activities": [
+                                {
+                                    "name": "File_Or_SQL",
+                                    "description": "This Switch is used to execute a certain case for certain Source Type",
+                                    "type": "Switch",
+                                    "dependsOn": [],
+                                    "userProperties": [],
+                                    "typeProperties": {
+                                        "on": {
+                                            "value": "@item().SourceType",
+                                            "type": "Expression"
+                                        },
+                                        "cases": [
+                                            {
+                                                "value": "SQL",
+                                                "activities": [
+                                                    {
+                                                        "name": "SQL_To_Landing",
+                                                        "description": "This Copy Activity is used to copy over the table from SQL Database to the Landing Zone",
+                                                        "type": "Copy",
+                                                        "dependsOn": [],
+                                                        "policy": {
+                                                            "timeout": "0.12:00:00",
+                                                            "retry": 0,
+                                                            "retryIntervalInSeconds": 30,
+                                                            "secureOutput": false,
+                                                            "secureInput": false
+                                                        },
+                                                        "userProperties": [],
+                                                        "typeProperties": {
+                                                            "source": {
+                                                                "type": "AzureSqlSource",
+                                                                "sqlReaderQuery": {
+                                                                    "value": "SELECT * \nFROM @{item().SchemaName}.@{item().TableName}\n@{if(equals(item().WatermarkValue, null), '', concat(' WHERE ', item().WatermarkColumn, ' >= ''', item().WatermarkValue, ''''))}\n",
+                                                                    "type": "Expression"
+                                                                },
+                                                                "queryTimeout": "02:00:00",
+                                                                "partitionOption": "None"
+                                                            },
+                                                            "sink": {
+                                                                "type": "ParquetSink",
+                                                                "storeSettings": {
+                                                                    "type": "AzureBlobFSWriteSettings"
+                                                                },
+                                                                "formatSettings": {
+                                                                    "type": "ParquetWriteSettings"
+                                                                }
+                                                            },
+                                                            "enableStaging": false,
+                                                            "translator": {
+                                                                "type": "TabularTranslator",
+                                                                "typeConversion": true,
+                                                                "typeConversionSettings": {
+                                                                    "allowDataTruncation": true,
+                                                                    "treatBooleanAsNumber": false
+                                                                }
+                                                            }
+                                                        },
+                                                        "inputs": [
+                                                            {
+                                                                "referenceName": "ds_SQL_sales",
+                                                                "type": "DatasetReference",
+                                                                "parameters": {}
+                                                            }
+                                                        ],
+                                                        "outputs": [
+                                                            {
+                                                                "referenceName": "ds_ADLS_landing",
+                                                                "type": "DatasetReference",
+                                                                "parameters": {
+                                                                    "Container": "landing",
+                                                                    "SchemaName": {
+                                                                        "value": "@{item().SchemaName}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "TableName": {
+                                                                        "value": "@{item().TableName}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "Year": {
+                                                                        "value": "@{formatDateTime(utcnow(), 'yyyy')}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "Month": "@{formatDateTime(utcnow(), 'MM')}",
+                                                                    "Day": "@{formatDateTime(utcnow(), 'dd')}",
+                                                                    "FileName": {
+                                                                        "value": "@{item().TableName}_@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd_HH-mm-ss')}.parquet",
+                                                                        "type": "Expression"
+                                                                    }
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "name": "Pipeline_Details_SQL",
+                                                        "description": "This Stored Procedure Activity is used to input the pipeline details for this table ingestion",
+                                                        "type": "SqlServerStoredProcedure",
+                                                        "dependsOn": [
+                                                            {
+                                                                "activity": "SQL_To_Landing",
+                                                                "dependencyConditions": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        ],
+                                                        "policy": {
+                                                            "timeout": "0.12:00:00",
+                                                            "retry": 0,
+                                                            "retryIntervalInSeconds": 30,
+                                                            "secureOutput": false,
+                                                            "secureInput": false
+                                                        },
+                                                        "userProperties": [],
+                                                        "typeProperties": {
+                                                            "storedProcedureName": "[[Metastore].[InsertInitialPipelineDetails]",
+                                                            "storedProcedureParameters": {
+                                                                "ADFName": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().DataFactory",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "data_read": {
+                                                                    "value": {
+                                                                        "value": "@activity('SQL_To_Landing').output.dataRead",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "data_written": {
+                                                                    "value": {
+                                                                        "value": "@activity('SQL_To_Landing').output.dataWritten",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "db_name": {
+                                                                    "value": {
+                                                                        "value": "@item().DBName",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "file_name": {
+                                                                    "value": null,
+                                                                    "type": "String"
+                                                                },
+                                                                "files_read": {
+                                                                    "value": null,
+                                                                    "type": "Int64"
+                                                                },
+                                                                "files_written": {
+                                                                    "value": {
+                                                                        "value": "@activity('SQL_To_Landing').output.filesWritten",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "job_start_date": {
+                                                                    "value": {
+                                                                        "value": "@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd HH:mm:ss')}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Datetime"
+                                                                },
+                                                                "pipeline_group_id": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().GroupId",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "pipeline_name": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().Pipeline",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "pipeline_run_id": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().RunId",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "pipeline_trigger_type": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().TriggerType",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "schema_name": {
+                                                                    "value": {
+                                                                        "value": "@item().SchemaName",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "source_type": {
+                                                                    "value": {
+                                                                        "value": "@item().SourceType",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "table_name": {
+                                                                    "value": {
+                                                                        "value": "@item().TableName",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "WatermarkValue": {
+                                                                    "value": {
+                                                                        "value": "@item().WatermarkValue",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "table_load_status": {
+                                                                    "value": {
+                                                                        "value": "@activity('SQL_To_Landing').output.executionDetails[0].status",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "job_end_date": {
+                                                                    "value": {
+                                                                        "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Datetime"
+                                                                }
+                                                            }
+                                                        },
+                                                        "linkedServiceName": {
+                                                            "referenceName": "mn_ls_sqldb",
+                                                            "type": "LinkedServiceReference"
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "Update_Watermark_Value",
+                                                        "description": "This Stored Procedure Activity is used to Update the Watermark Value to the new Watermark Value for the specific table",
+                                                        "type": "SqlServerStoredProcedure",
+                                                        "dependsOn": [
+                                                            {
+                                                                "activity": "New_Watermark_Value_SQL",
+                                                                "dependencyConditions": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        ],
+                                                        "policy": {
+                                                            "timeout": "0.12:00:00",
+                                                            "retry": 0,
+                                                            "retryIntervalInSeconds": 30,
+                                                            "secureOutput": false,
+                                                            "secureInput": false
+                                                        },
+                                                        "userProperties": [],
+                                                        "typeProperties": {
+                                                            "storedProcedureName": "[[Metastore].[UpdateWatermarkTableDetails]",
+                                                            "storedProcedureParameters": {
+                                                                "SchemaName": {
+                                                                    "value": {
+                                                                        "value": "@{item().SchemaName}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "TableName": {
+                                                                    "value": {
+                                                                        "value": "@{item().TableName}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "WatermarkValue": {
+                                                                    "value": {
+                                                                        "value": "@activity('New_Watermark_Value_SQL').output.firstRow.NewWatermarkValue",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                }
+                                                            }
+                                                        },
+                                                        "linkedServiceName": {
+                                                            "referenceName": "mn_ls_sqldb",
+                                                            "type": "LinkedServiceReference"
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "New_Watermark_Value_SQL",
+                                                        "description": "This Lookup Activity is used to find the new Watermark Value for the specific table",
+                                                        "type": "Lookup",
+                                                        "dependsOn": [
+                                                            {
+                                                                "activity": "Pipeline_Details_SQL",
+                                                                "dependencyConditions": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        ],
+                                                        "policy": {
+                                                            "timeout": "0.12:00:00",
+                                                            "retry": 0,
+                                                            "retryIntervalInSeconds": 30,
+                                                            "secureOutput": false,
+                                                            "secureInput": false
+                                                        },
+                                                        "userProperties": [],
+                                                        "typeProperties": {
+                                                            "source": {
+                                                                "type": "AzureSqlSource",
+                                                                "sqlReaderQuery": {
+                                                                    "value": "SELECT MAX(@{item().WatermarkColumn}) AS NewWatermarkValue\nFROM @{item().SchemaName}.@{item().TableName};",
+                                                                    "type": "Expression"
+                                                                },
+                                                                "queryTimeout": "02:00:00",
+                                                                "partitionOption": "None"
+                                                            },
+                                                            "dataset": {
+                                                                "referenceName": "ds_SQL_sales",
+                                                                "type": "DatasetReference",
+                                                                "parameters": {}
+                                                            }
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "value": "File",
+                                                "activities": [
+                                                    {
+                                                        "name": "Pipeline_Details_File",
+                                                        "description": "This Stored Procedure Activity is used to input the pipeline details for this file ingestion.",
+                                                        "type": "SqlServerStoredProcedure",
+                                                        "dependsOn": [
+                                                            {
+                                                                "activity": "FileSystem_To_Landing",
+                                                                "dependencyConditions": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        ],
+                                                        "policy": {
+                                                            "timeout": "0.12:00:00",
+                                                            "retry": 0,
+                                                            "retryIntervalInSeconds": 30,
+                                                            "secureOutput": false,
+                                                            "secureInput": false
+                                                        },
+                                                        "userProperties": [],
+                                                        "typeProperties": {
+                                                            "storedProcedureName": "[[Metastore].[InsertInitialPipelineDetails]",
+                                                            "storedProcedureParameters": {
+                                                                "ADFName": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().DataFactory",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "data_read": {
+                                                                    "value": {
+                                                                        "value": "@activity('FileSystem_To_Landing').output.dataRead",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "data_written": {
+                                                                    "value": {
+                                                                        "value": "@activity('FileSystem_To_Landing').output.dataWritten",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "db_name": {
+                                                                    "value": {
+                                                                        "value": "@item().DBName",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "file_name": {
+                                                                    "value": {
+                                                                        "value": "@item().FileName",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "files_read": {
+                                                                    "value": {
+                                                                        "value": "@activity('FileSystem_To_Landing').output.filesRead",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "files_written": {
+                                                                    "value": {
+                                                                        "value": "@activity('FileSystem_To_Landing').output.filesWritten",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Int64"
+                                                                },
+                                                                "job_start_date": {
+                                                                    "value": {
+                                                                        "value": "@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd HH:mm:ss')}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Datetime"
+                                                                },
+                                                                "pipeline_group_id": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().GroupId",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "pipeline_name": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().Pipeline",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "pipeline_run_id": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().RunId",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "pipeline_trigger_type": {
+                                                                    "value": {
+                                                                        "value": "@pipeline().TriggerType",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "schema_name": {
+                                                                    "value": {
+                                                                        "value": "@item().SchemaName",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "source_type": {
+                                                                    "value": {
+                                                                        "value": "@item().SourceType",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "table_name": {
+                                                                    "value": null,
+                                                                    "type": "String"
+                                                                },
+                                                                "WatermarkValue": {
+                                                                    "value": {
+                                                                        "value": "@item().WatermarkValue",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "table_load_status": {
+                                                                    "value": {
+                                                                        "value": "@activity('FileSystem_To_Landing').output.executionDetails[0].status",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "String"
+                                                                },
+                                                                "job_end_date": {
+                                                                    "value": {
+                                                                        "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd HH:mm:ss')}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "type": "Datetime"
+                                                                }
+                                                            }
+                                                        },
+                                                        "linkedServiceName": {
+                                                            "referenceName": "mn_ls_sqldb",
+                                                            "type": "LinkedServiceReference"
+                                                        }
+                                                    },
+                                                    {
+                                                        "name": "FileSystem_To_Landing",
+                                                        "description": "This Copy Activity is used to copy over the File from filesystem container to the Landing Zone",
+                                                        "type": "Copy",
+                                                        "dependsOn": [],
+                                                        "policy": {
+                                                            "timeout": "0.12:00:00",
+                                                            "retry": 0,
+                                                            "retryIntervalInSeconds": 30,
+                                                            "secureOutput": false,
+                                                            "secureInput": false
+                                                        },
+                                                        "userProperties": [],
+                                                        "typeProperties": {
+                                                            "source": {
+                                                                "type": "DelimitedTextSource",
+                                                                "storeSettings": {
+                                                                    "type": "AzureBlobFSReadSettings",
+                                                                    "recursive": true,
+                                                                    "enablePartitionDiscovery": false
+                                                                },
+                                                                "formatSettings": {
+                                                                    "type": "DelimitedTextReadSettings"
+                                                                }
+                                                            },
+                                                            "sink": {
+                                                                "type": "ParquetSink",
+                                                                "storeSettings": {
+                                                                    "type": "AzureBlobFSWriteSettings"
+                                                                },
+                                                                "formatSettings": {
+                                                                    "type": "ParquetWriteSettings"
+                                                                }
+                                                            },
+                                                            "enableStaging": false,
+                                                            "translator": {
+                                                                "type": "TabularTranslator",
+                                                                "typeConversion": true,
+                                                                "typeConversionSettings": {
+                                                                    "allowDataTruncation": true,
+                                                                    "treatBooleanAsNumber": false
+                                                                }
+                                                            }
+                                                        },
+                                                        "inputs": [
+                                                            {
+                                                                "referenceName": "ds_ADLS_file",
+                                                                "type": "DatasetReference",
+                                                                "parameters": {
+                                                                    "FileName": {
+                                                                        "value": "@item().FileName\n",
+                                                                        "type": "Expression"
+                                                                    }
+                                                                }
+                                                            }
+                                                        ],
+                                                        "outputs": [
+                                                            {
+                                                                "referenceName": "ds_ADLS_landing",
+                                                                "type": "DatasetReference",
+                                                                "parameters": {
+                                                                    "Container": "landing",
+                                                                    "SchemaName": {
+                                                                        "value": "@{item().SchemaName}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "TableName": {
+                                                                        "value": "@split(item().FileName, '.')[0]\n",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "Year": {
+                                                                        "value": "@{formatDateTime(utcnow(), 'yyyy')}",
+                                                                        "type": "Expression"
+                                                                    },
+                                                                    "Month": "@{formatDateTime(utcnow(), 'MM')}",
+                                                                    "Day": "@{formatDateTime(utcnow(), 'dd')}",
+                                                                    "FileName": {
+                                                                        "value": "@{split(item().FileName, '.')[0]}_@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd_HH-mm-ss')}.parquet",
+                                                                        "type": "Expression"
+                                                                    }
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ],
+                                        "defaultActivities": [
+                                            {
+                                                "name": "Incorrect_Source_Type",
+                                                "description": "This Fail Activity is used because the Source Type is not SQL or File",
+                                                "type": "Fail",
+                                                "dependsOn": [],
+                                                "userProperties": [],
+                                                "typeProperties": {
+                                                    "message": "Wrong Source Type",
+                                                    "errorCode": "400"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "name": "Landing_To_Bronze",
+                        "description": "This Copy Activity is used to copy over all the folders and files from the Landing Zone to the Bronze Zone",
+                        "type": "Copy",
+                        "dependsOn": [
+                            {
+                                "activity": "Each_Table_Or_File",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "source": {
+                                "type": "ParquetSource",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSReadSettings",
+                                    "recursive": true,
+                                    "wildcardFileName": "*",
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "ParquetReadSettings"
+                                }
+                            },
+                            "sink": {
+                                "type": "ParquetSink",
+                                "storeSettings": {
+                                    "type": "AzureBlobFSWriteSettings"
+                                },
+                                "formatSettings": {
+                                    "type": "ParquetWriteSettings"
+                                }
+                            },
+                            "enableStaging": false,
+                            "translator": {
+                                "type": "TabularTranslator",
+                                "typeConversion": true,
+                                "typeConversionSettings": {
+                                    "allowDataTruncation": true,
+                                    "treatBooleanAsNumber": false
+                                }
+                            }
+                        },
+                        "inputs": [
+                            {
+                                "referenceName": "ds_ADLS_zone",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "Container": "landing"
+                                }
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "referenceName": "ds_ADLS_zone",
+                                "type": "DatasetReference",
+                                "parameters": {
+                                    "Container": "bronze"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Bronze_To_Silver",
+                        "description": "This Notebook Activity is used to do the necessary transformations of the Silver Layer on the Bronze Layer data",
+                        "type": "DatabricksNotebook",
+                        "dependsOn": [
+                            {
+                                "activity": "Landing_To_Bronze",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "notebookPath": "/Users/mrigank.nalin@tigeranalytics.com/Bronze_To_Silver",
+                            "baseParameters": {
+                                "Current_Timestamp": {
+                                    "value": "@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd_HH-mm-ss')}",
+                                    "type": "Expression"
+                                },
+                                "Source_Type": {
+                                    "value": "@pipeline().parameters.source_name",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "mn_ls_adb",
+                            "type": "LinkedServiceReference"
+                        }
+                    },
+                    {
+                        "name": "Bronze_To_Silver_Run_Url_Success",
+                        "description": "This Set Variable is used to return the runPageUrls of the Bronze_To_Silver Notebook",
+                        "type": "SetVariable",
+                        "dependsOn": [
+                            {
+                                "activity": "Bronze_To_Silver",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "pipelineReturnValue",
+                            "value": [
+                                {
+                                    "key": "BronzeToSilverUrl",
+                                    "value": {
+                                        "type": "Expression",
+                                        "content": "@activity('Bronze_To_Silver').output.runPageUrl"
+                                    }
+                                }
+                            ],
+                            "setSystemVariable": true
+                        }
+                    },
+                    {
+                        "name": "Bronze_To_Silver_Run_Url_Failed",
+                        "description": "This Set Variable is used to return the runPageUrls of the Bronze_To_Silver Notebook",
+                        "type": "SetVariable",
+                        "dependsOn": [
+                            {
+                                "activity": "Bronze_To_Silver",
+                                "dependencyConditions": [
+                                    "Failed"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "variableName": "pipelineReturnValue",
+                            "value": [
+                                {
+                                    "key": "BronzeToSilverUrl",
+                                    "value": {
+                                        "type": "Expression",
+                                        "content": "@activity('Bronze_To_Silver').output.runPageUrl"
+                                    }
+                                }
+                            ],
+                            "setSystemVariable": true
+                        }
+                    },
+                    {
+                        "name": "Bronze_To_Silver_Pipeline_Failed",
+                        "description": "This Fail Activity is used to get \"Failed\" in the Master Pipeline",
+                        "type": "Fail",
+                        "dependsOn": [
+                            {
+                                "activity": "Bronze_To_Silver_Run_Url_Failed",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "message": "Notebook Failed",
+                            "errorCode": "500"
+                        }
+                    },
+                    {
+                        "name": "SQL_Or_File",
+                        "description": "This Switch is used to execute the Silver_To_Gold Notebook when the source type is SQL else do nothing",
+                        "type": "Switch",
+                        "dependsOn": [
+                            {
+                                "activity": "Bronze_To_Silver_Run_Url_Success",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "userProperties": [],
+                        "typeProperties": {
+                            "on": {
+                                "value": "@pipeline().parameters.source_name",
+                                "type": "Expression"
+                            },
+                            "cases": [
+                                {
+                                    "value": "SQL",
+                                    "activities": [
+                                        {
+                                            "name": "Silver_To_Gold",
+                                            "description": "This Notebook Activity is used to do the necessary transformations of the Gold Layer on the Silver Layer SalesLT data",
+                                            "type": "DatabricksNotebook",
+                                            "dependsOn": [],
+                                            "policy": {
+                                                "timeout": "0.12:00:00",
+                                                "retry": 0,
+                                                "retryIntervalInSeconds": 30,
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "notebookPath": "/Users/mrigank.nalin@tigeranalytics.com/Silver_To_Gold"
+                                            },
+                                            "linkedServiceName": {
+                                                "referenceName": "mn_ls_adb",
+                                                "type": "LinkedServiceReference"
+                                            }
+                                        },
+                                        {
+                                            "name": "Silver_To_Gold_Run_Url_Success",
+                                            "description": "This Set Variable is used to return the runPageUrls of the Bronze_To_Silver Notebook and Silver_To_Gold Notebook",
+                                            "type": "SetVariable",
+                                            "dependsOn": [
+                                                {
+                                                    "activity": "Silver_To_Gold",
+                                                    "dependencyConditions": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            ],
+                                            "policy": {
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "variableName": "pipelineReturnValue",
+                                                "value": [
+                                                    {
+                                                        "key": "SilverToGoldUrl",
+                                                        "value": {
+                                                            "type": "Expression",
+                                                            "content": "@activity('Silver_To_Gold').output.runPageUrl"
+                                                        }
+                                                    },
+                                                    {
+                                                        "key": "BronzeToSilverUrl",
+                                                        "value": {
+                                                            "type": "Expression",
+                                                            "content": "@activity('Bronze_To_Silver').output.runPageUrl"
+                                                        }
+                                                    }
+                                                ],
+                                                "setSystemVariable": true
+                                            }
+                                        },
+                                        {
+                                            "name": "Silver_To_Gold_Run_Url_Failed",
+                                            "description": "This Set Variable is used to return the runPageUrls of the Bronze_To_Silver Notebook and Silver_To_Gold Notebook",
+                                            "type": "SetVariable",
+                                            "dependsOn": [
+                                                {
+                                                    "activity": "Silver_To_Gold",
+                                                    "dependencyConditions": [
+                                                        "Failed"
+                                                    ]
+                                                }
+                                            ],
+                                            "policy": {
+                                                "secureOutput": false,
+                                                "secureInput": false
+                                            },
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "variableName": "pipelineReturnValue",
+                                                "value": [
+                                                    {
+                                                        "key": "SilverToGoldUrl",
+                                                        "value": {
+                                                            "type": "Expression",
+                                                            "content": "@activity('Silver_To_Gold').output.runPageUrl"
+                                                        }
+                                                    },
+                                                    {
+                                                        "key": "BronzeToSilverUrl",
+                                                        "value": {
+                                                            "type": "Expression",
+                                                            "content": "@activity('Bronze_To_Silver').output.runPageUrl"
+                                                        }
+                                                    }
+                                                ],
+                                                "setSystemVariable": true
+                                            }
+                                        },
+                                        {
+                                            "name": "Silver_To_Gold_Pipeline_Failed",
+                                            "description": "This Fail Activity is used to get \"Failed\" in the Master Pipeline",
+                                            "type": "Fail",
+                                            "dependsOn": [
+                                                {
+                                                    "activity": "Silver_To_Gold_Run_Url_Failed",
+                                                    "dependencyConditions": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            ],
+                                            "userProperties": [],
+                                            "typeProperties": {
+                                                "message": "Silver_To_Gold Notebook Failed",
+                                                "errorCode": "500"
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "parameters": {
+                    "source_name": {
+                        "type": "string"
+                    }
+                },
+                "variables": {
+                    "url": {
+                        "type": "String"
+                    }
+                },
+                "annotations": [],
+                "lastPublishTime": "2025-09-29T19:08:25Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_SQL_sales')]",
+                "[concat(variables('factoryId'), '/datasets/ds_ADLS_zone')]",
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_adb')]",
+                "[concat(variables('factoryId'), '/datasets/ds_ADLS_landing')]",
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_sqldb')]",
+                "[concat(variables('factoryId'), '/datasets/ds_ADLS_file')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/Master_Pipeline')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "Base_Pipeline",
+                        "description": "This Execute Pipeline Activity is used to execute the main pipeline",
+                        "type": "ExecutePipeline",
+                        "dependsOn": [],
+                        "policy": {
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "pipeline": {
+                                "referenceName": "Base_Pipeline",
+                                "type": "PipelineReference"
+                            },
+                            "waitOnCompletion": true,
+                            "parameters": {
+                                "source_name": {
+                                    "value": "@pipeline().parameters.master_source_name",
+                                    "type": "Expression"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "name": "Success_Email",
+                        "description": "This Web Activity is used to Send a \"Success\" mail to the user through Logic Apps",
+                        "type": "WebActivity",
+                        "dependsOn": [
+                            {
+                                "activity": "Base_Pipeline",
+                                "dependencyConditions": [
+                                    "Succeeded"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "method": "POST",
+                            "headers": {},
+                            "url": {
+                                "value": "https://prod-13.northcentralus.logic.azure.com:443/workflows/b640f83f67dc45f2bccb31c08e7c7015/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=iBbIhj8ORhI8sC1UruCQpDVWXHKKm8_zc3Fvkm_mC6A",
+                                "type": "Expression"
+                            },
+                            "body": {
+                                "value": "{\n  \"subject\": \"Data Pipeline Execution Succeeded with run ID @{pipeline().RunId}\",\n  \"message\": \"We are pleased to inform you that the pipeline execution has successfully completed.\",\n  \"dataFactoryName\":\"@{pipeline().DataFactory}\",\n  \"pipelineName\":\"@{pipeline().Pipeline}\",\n  \"receiver\": \"@{pipeline().parameters.receiver}\",\n  \"status\": \"@{activity('Base_Pipeline').status}\",\n  \"bronzetosilver\": \"Successful\",\n  \"silvertogold\": \"Successful\"\n}",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Failed_Email",
+                        "description": "This Web Activity is used to Send a \"Failed\" mail to the user through Logic Apps",
+                        "type": "WebActivity",
+                        "dependsOn": [
+                            {
+                                "activity": "Base_Pipeline",
+                                "dependencyConditions": [
+                                    "Failed"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "method": "POST",
+                            "headers": {},
+                            "url": {
+                                "value": "https://prod-13.northcentralus.logic.azure.com:443/workflows/b640f83f67dc45f2bccb31c08e7c7015/triggers/When_a_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_a_HTTP_request_is_received%2Frun&sv=1.0&sig=iBbIhj8ORhI8sC1UruCQpDVWXHKKm8_zc3Fvkm_mC6A",
+                                "type": "Expression"
+                            },
+                            "body": {
+                                "value": "{\n  \"subject\": \"Data Pipeline Execution Failed with run ID @{pipeline().RunId}\",\n  \"message\": \"Unfortunately, the pipeline execution has failed. Please see the details below:\",\n  \"dataFactoryName\":\"@{pipeline().DataFactory}\",\n  \"pipelineName\":\"@{pipeline().Pipeline}\",\n  \"receiver\": \"@{pipeline().parameters.receiver}\",\n  \"status\": \"@{activity('Base_Pipeline').status}\",\n  \"bronzetosilver\": \"@{if(contains(activity('Base_Pipeline').output.pipelineReturnValue, 'BronzeToSilverUrl'), activity('Base_Pipeline').output.pipelineReturnValue.BronzeToSilverUrl, 'No URL Available')}\",\n  \"silvertogold\": \"@{if(contains(activity('Base_Pipeline').output.pipelineReturnValue, 'SilverToGoldUrl'), activity('Base_Pipeline').output.pipelineReturnValue.SilverToGoldUrl, 'No URL Available')}\"\n}\n",
+                                "type": "Expression"
+                            }
+                        }
+                    },
+                    {
+                        "name": "Pipeline_Details_Success",
+                        "description": "This Stored Procedure Activity is used to input the pipeline details for this Master Pipeline",
+                        "type": "SqlServerStoredProcedure",
+                        "dependsOn": [
+                            {
+                                "activity": "Success_Email",
+                                "dependencyConditions": [
+                                    "Completed"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "storedProcedureName": "[[Metastore].[MasterPipelineDetails]",
+                            "storedProcedureParameters": {
+                                "ADFName": {
+                                    "value": {
+                                        "value": "@pipeline().DataFactory",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "job_end_date": {
+                                    "value": {
+                                        "value": "@{formatDateTime(utcnow(), 'yyyy-MM-dd HH:mm:ss')}",
+                                        "type": "Expression"
+                                    },
+                                    "type": "Datetime"
+                                },
+                                "job_start_date": {
+                                    "value": {
+                                        "value": "@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd HH:mm:ss')}",
+                                        "type": "Expression"
+                                    },
+                                    "type": "Datetime"
+                                },
+                                "pipeline_group_id": {
+                                    "value": {
+                                        "value": "@pipeline().GroupId",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_name": {
+                                    "value": {
+                                        "value": "@pipeline().Pipeline",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_run_id": {
+                                    "value": {
+                                        "value": "@pipeline().RunId",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_status": {
+                                    "value": {
+                                        "value": "@activity('Base_Pipeline').status",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_trigger_type": {
+                                    "value": {
+                                        "value": "@pipeline().TriggerType",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                }
+                            }
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "mn_ls_sqldb",
+                            "type": "LinkedServiceReference"
+                        }
+                    },
+                    {
+                        "name": "Pipeline_Details_Failed",
+                        "description": "This Stored Procedure Activity is used to input the pipeline details for this Master Pipeline",
+                        "type": "SqlServerStoredProcedure",
+                        "dependsOn": [
+                            {
+                                "activity": "Failed_Email",
+                                "dependencyConditions": [
+                                    "Completed"
+                                ]
+                            }
+                        ],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "storedProcedureName": "[[Metastore].[MasterPipelineDetails]",
+                            "storedProcedureParameters": {
+                                "ADFName": {
+                                    "value": {
+                                        "value": "@pipeline().DataFactory",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "job_end_date": {
+                                    "value": {
+                                        "value": "@{formatDateTime(utcnow(), 'yyyy-MM-dd HH:mm:ss')}",
+                                        "type": "Expression"
+                                    },
+                                    "type": "Datetime"
+                                },
+                                "job_start_date": {
+                                    "value": {
+                                        "value": "@{formatDateTime(pipeline().TriggerTime, 'yyyy-MM-dd HH:mm:ss')}",
+                                        "type": "Expression"
+                                    },
+                                    "type": "Datetime"
+                                },
+                                "pipeline_group_id": {
+                                    "value": {
+                                        "value": "@pipeline().GroupId",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_name": {
+                                    "value": {
+                                        "value": "@pipeline().Pipeline",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_run_id": {
+                                    "value": {
+                                        "value": "@pipeline().RunId",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_status": {
+                                    "value": {
+                                        "value": "@activity('Base_Pipeline').status",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                },
+                                "pipeline_trigger_type": {
+                                    "value": {
+                                        "value": "@pipeline().TriggerType",
+                                        "type": "Expression"
+                                    },
+                                    "type": "String"
+                                }
+                            }
+                        },
+                        "linkedServiceName": {
+                            "referenceName": "mn_ls_sqldb",
+                            "type": "LinkedServiceReference"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "parameters": {
+                    "receiver": {
+                        "type": "string",
+                        "defaultValue": "mrigank.nalin@tigeranalytics.com"
+                    },
+                    "master_source_name": {
+                        "type": "string"
+                    }
+                },
+                "variables": {
+                    "url": {
+                        "type": "String"
+                    }
+                },
+                "annotations": [],
+                "lastPublishTime": "2025-09-29T19:09:48Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/pipelines/Base_Pipeline')]",
+                "[concat(variables('factoryId'), '/linkedServices/mn_ls_sqldb')]"
+            ]
+        }
+    ]
+}

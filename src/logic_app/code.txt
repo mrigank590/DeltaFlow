@@ -1,0 +1,82 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_a_HTTP_request_is_received": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "properties": {
+                            "dataFactoryName": {
+                                "type": "string"
+                            },
+                            "subject": {
+                                "type": "string"
+                            },
+                            "message": {
+                                "type": "string"
+                            },
+                            "pipelineName": {
+                                "type": "string"
+                            },
+                            "receiver": {
+                                "type": "string"
+                            },
+                            "status": {
+                                "type": "string"
+                            },
+                            "bronzetosilver": {
+                                "type": "string"
+                            },
+                            "silvertogold": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Send_email_(V2)": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['gmail']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": {
+                        "To": "@triggerBody()?['receiver']",
+                        "Subject": "@triggerBody()?['subject']",
+                        "Body": "<p class=\"editor-paragraph\">Dear Team,<br><br>@{triggerBody()?['message']}<br><br>Data Factory Name: @{triggerBody()?['dataFactoryName']}<br>Pipeline Name: @{triggerBody()?['pipelineName']}<br>Bronze To Silver Job Run: @{triggerBody()?['bronzetosilver']}<br>Silver To Gold Job Run: @{triggerBody()?['silvertogold']}<br>Execution Status: @{triggerBody()?['status']}</p>"
+                    },
+                    "path": "/v2/Mail"
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "gmail": {
+                    "id": "/subscriptions/<subscription-id>/providers/Microsoft.Web/locations/northcentralus/managedApis/gmail",
+                    "connectionId": "/subscriptions/<subscription-id>/resourceGroups/<rg>/providers/Microsoft.Web/connections/gmail",
+                    "connectionName": "gmail"
+                }
+            }
+        }
+    }
+}
